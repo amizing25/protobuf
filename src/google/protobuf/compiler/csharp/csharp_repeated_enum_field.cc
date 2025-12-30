@@ -31,10 +31,17 @@ RepeatedEnumFieldGenerator::RepeatedEnumFieldGenerator(
 RepeatedEnumFieldGenerator::~RepeatedEnumFieldGenerator() = default;
 
 void RepeatedEnumFieldGenerator::GenerateMembers(io::Printer* printer) {
-  printer->Print(
-    variables_,
-    "private static readonly pb::FieldCodec<$type_name$> _repeated_$name$_codec\n"
-    "    = pb::FieldCodec.ForEnum($tag$, x => (int) x, x => ($type_name$) x);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "private static pb::FieldCodec<$type_name$> _repeated_$name$_codec()\n"
+      "    => dyn::DynamicCodec.ForEnum(\"$full_message_name$\", \"$descriptor_name$\", x => (int) x, x => ($type_name$) x);\n");
+  } else {
+    printer->Print(
+      variables_,
+      "private static readonly pb::FieldCodec<$type_name$> _repeated_$name$_codec\n"
+      "    = pb::FieldCodec.ForEnum($tag$, x => (int) x, x => ($type_name$) x);\n");
+  }
   printer->Print(variables_,
     "private readonly pbc::RepeatedField<$type_name$> $name$_ = new pbc::RepeatedField<$type_name$>();\n");
   WritePropertyDocComment(printer, options(), descriptor_);
@@ -57,11 +64,19 @@ void RepeatedEnumFieldGenerator::GenerateParsingCode(io::Printer* printer) {
 }
 
 void RepeatedEnumFieldGenerator::GenerateParsingCode(io::Printer* printer, bool use_parse_context) {
-  printer->Print(
-    variables_,
-    use_parse_context
-    ? "$name$_.AddEntriesFrom(ref input, _repeated_$name$_codec);\n"
-    : "$name$_.AddEntriesFrom(input, _repeated_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      use_parse_context
+      ? "$name$_.AddEntriesFrom(ref input, _repeated_$name$_codec());\n"
+      : "$name$_.AddEntriesFrom(input, _repeated_$name$_codec());\n");
+  } else {
+    printer->Print(
+      variables_,
+      use_parse_context
+      ? "$name$_.AddEntriesFrom(ref input, _repeated_$name$_codec);\n"
+      : "$name$_.AddEntriesFrom(input, _repeated_$name$_codec);\n");
+  }
 }
 
 void RepeatedEnumFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
@@ -69,17 +84,45 @@ void RepeatedEnumFieldGenerator::GenerateSerializationCode(io::Printer* printer)
 }
 
 void RepeatedEnumFieldGenerator::GenerateSerializationCode(io::Printer* printer, bool use_write_context) {
-  printer->Print(
-    variables_,
-    use_write_context
-    ? "$name$_.WriteTo(ref output, _repeated_$name$_codec);\n"
-    : "$name$_.WriteTo(output, _repeated_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_field_check$) {\n"
+    );
+    printer->Print(
+      variables_,
+      use_write_context
+      ? "  $name$_.WriteTo(ref output, _repeated_$name$_codec());\n"
+      : "  $name$_.WriteTo(output, _repeated_$name$_codec());\n");
+    printer->Print(
+      "}\n"
+    );
+  } else {
+    printer->Print(
+      variables_,
+      use_write_context
+      ? "$name$_.WriteTo(ref output, _repeated_$name$_codec);\n"
+      : "$name$_.WriteTo(output, _repeated_$name$_codec);\n");
+  }
 }
 
 void RepeatedEnumFieldGenerator::GenerateSerializedSizeCode(io::Printer* printer) {
-  printer->Print(
-    variables_,
-    "size += $name$_.CalculateSize(_repeated_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_field_check$) {\n"
+    );
+    printer->Print(
+      variables_,
+      "  size += $name$_.CalculateSize(_repeated_$name$_codec());\n");
+    printer->Print(
+      "}\n"
+    );
+  } else {
+    printer->Print(
+      variables_,
+      "size += $name$_.CalculateSize(_repeated_$name$_codec);\n");
+  }
 }
 
 void RepeatedEnumFieldGenerator::WriteHash(io::Printer* printer) {

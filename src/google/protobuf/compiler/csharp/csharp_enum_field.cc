@@ -36,11 +36,22 @@ void EnumFieldGenerator::GenerateParsingCode(io::Printer* printer) {
 }
 
 void EnumFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
-  printer->Print(variables_,
+  if (options()->dynamic_runtime) {
+    printer->Print(variables_,
+    "if ($has_property_check$) {\n"
+    "  var tag = dyn::DynamicFieldRegistry.GetTag(\"$full_message_name$\", \"$descriptor_name$\");\n"
+    "  if (tag != 0) {\n"
+    "    output.WriteTag(tag);\n"
+    "    output.WriteEnum((int) $property_name$);\n"
+    "  }\n"
+    "}\n");
+  } else {
+    printer->Print(variables_,
     "if ($has_property_check$) {\n"
     "  output.WriteRawTag($tag_bytes$);\n"
     "  output.WriteEnum((int) $property_name$);\n"
     "}\n");
+  }
 }
 
 void EnumFieldGenerator::GenerateSerializedSizeCode(io::Printer* printer) {
@@ -52,9 +63,15 @@ void EnumFieldGenerator::GenerateSerializedSizeCode(io::Printer* printer) {
 }
 
 void EnumFieldGenerator::GenerateCodecCode(io::Printer* printer) {
-  printer->Print(
+  if (options()->dynamic_runtime && !IsMapEntryMessage(descriptor_->containing_type())) {
+    printer->Print(
+      variables_,
+      "dyn::DynamicCodec.ForEnum(\"$full_message_name$\", \"$descriptor_name$\", x => (int) x, x => ($type_name$) x, $default_value$)");
+  } else {
+    printer->Print(
       variables_,
       "pb::FieldCodec.ForEnum($tag$, x => (int) x, x => ($type_name$) x, $default_value$)");
+  }
 }
 
 void EnumFieldGenerator::GenerateExtensionCode(io::Printer* printer) {
@@ -88,12 +105,22 @@ void EnumOneofFieldGenerator::GenerateParsingCode(io::Printer* printer) {
 }
 
 void EnumOneofFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
-  printer->Print(
-    variables_,
+  if (options()->dynamic_runtime) {
+    printer->Print(variables_,
+    "if ($has_property_check$) {\n"
+    "  var tag = dyn::DynamicFieldRegistry.GetTag(\"$full_message_name$\", \"$descriptor_name$\");\n"
+    "  if (tag != 0) {\n"
+    "    output.WriteTag(tag);\n"
+    "    output.WriteEnum((int) $property_name$);\n"
+    "  }\n"
+    "}\n");
+  } else {
+    printer->Print(variables_,
     "if ($has_property_check$) {\n"
     "  output.WriteRawTag($tag_bytes$);\n"
     "  output.WriteEnum((int) $property_name$);\n"
     "}\n");
+  }
 }
 
 void EnumOneofFieldGenerator::GenerateSerializedSizeCode(io::Printer* printer) {

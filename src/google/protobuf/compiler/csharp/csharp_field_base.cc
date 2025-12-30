@@ -16,6 +16,7 @@
 #include "google/protobuf/compiler/code_generator.h"
 #include "google/protobuf/compiler/csharp/csharp_helpers.h"
 #include "google/protobuf/compiler/csharp/names.h"
+#include "google/protobuf/compiler/csharp/csharp_options.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/descriptor.pb.h"
 #include "google/protobuf/io/coded_stream.h"
@@ -50,8 +51,25 @@ void FieldGeneratorBase::SetCommonFieldVariables(
   }
 
   (*variables)["tag"] = absl::StrCat(tag);
-  (*variables)["tag_size"] = absl::StrCat(tag_size);
-  (*variables)["tag_bytes"] = tag_bytes;
+  if (options()->dynamic_runtime) {
+    std::string ts = "dyn::DynamicFieldRegistry.GetTagSize(\"";
+    ts += descriptor_->containing_type()->full_name();
+    ts += "\", \"";
+    ts += descriptor_->name();
+    ts += "\")";
+    (*variables)["tag_size"] = ts;
+
+    std::string hfc = "dyn::DynamicFieldRegistry.HasField(\"";
+    hfc += descriptor_->containing_type()->full_name();
+    hfc += "\", \"";
+    hfc += descriptor_->name();
+    hfc += "\")";
+
+    (*variables)["has_field_check"] = hfc;
+  } else {
+    (*variables)["tag_size"] = absl::StrCat(tag_size);
+  }
+  (*variables)["tag_bytes"] = tag_bytes;  
 
   if (descriptor_->type() == FieldDescriptor::Type::TYPE_GROUP) {
     tag = internal::WireFormatLite::MakeTag(
@@ -69,6 +87,7 @@ void FieldGeneratorBase::SetCommonFieldVariables(
   }
 
   (*variables)["access_level"] = "public";
+  (*variables)["full_message_name"] = descriptor_->containing_type()->full_name();
 
   (*variables)["property_name"] = property_name();
   (*variables)["type_name"] = type_name();

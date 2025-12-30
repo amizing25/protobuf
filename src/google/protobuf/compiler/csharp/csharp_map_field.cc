@@ -41,17 +41,28 @@ void MapFieldGenerator::GenerateMembers(io::Printer* printer) {
   std::unique_ptr<FieldGeneratorBase> value_generator(
       CreateFieldGenerator(value_descriptor, 2, this->options()));
 
-  printer->Print(
-    variables_,
-    "private static readonly pbc::MapField<$key_type_name$, $value_type_name$>.Codec _map_$name$_codec\n"
-    "    = new pbc::MapField<$key_type_name$, $value_type_name$>.Codec(");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "private static pbc::MapField<$key_type_name$, $value_type_name$>.Codec _map_$name$_codec()\n"
+      "    => dyn::DynamicCodec.ForMap<$key_type_name$, $value_type_name$>(\"$full_message_name$\", \"$descriptor_name$\", ");
+  } else {
+    printer->Print(
+      variables_,
+      "private static readonly pbc::MapField<$key_type_name$, $value_type_name$>.Codec _map_$name$_codec\n"
+      "    = new pbc::MapField<$key_type_name$, $value_type_name$>.Codec(");
+  }
   key_generator->GenerateCodecCode(printer);
   printer->Print(", ");
   value_generator->GenerateCodecCode(printer);
   printer->Print(
     variables_,
-    ", $tag$);\n"
-    "private readonly pbc::MapField<$key_type_name$, $value_type_name$> $name$_ = new pbc::MapField<$key_type_name$, $value_type_name$>();\n");
+    options()->dynamic_runtime ? ");\n" : ", $tag$);\n"
+  );
+  printer->Print(
+    variables_,
+    "private readonly pbc::MapField<$key_type_name$, $value_type_name$> $name$_ = new pbc::MapField<$key_type_name$, $value_type_name$>();\n"
+  );
   WritePropertyDocComment(printer, options(), descriptor_);
   AddPublicMemberAttributes(printer);
   printer->Print(
@@ -71,11 +82,19 @@ void MapFieldGenerator::GenerateParsingCode(io::Printer* printer) {
 }
 
 void MapFieldGenerator::GenerateParsingCode(io::Printer* printer, bool use_parse_context) {
-  printer->Print(
-    variables_,
-    use_parse_context
-    ? "$name$_.AddEntriesFrom(ref input, _map_$name$_codec);\n"
-    : "$name$_.AddEntriesFrom(input, _map_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      use_parse_context
+      ? "$name$_.AddEntriesFrom(ref input, _map_$name$_codec());\n"
+      : "$name$_.AddEntriesFrom(input, _map_$name$_codec());\n");
+  } else {
+    printer->Print(
+      variables_,
+      use_parse_context
+      ? "$name$_.AddEntriesFrom(ref input, _map_$name$_codec);\n"
+      : "$name$_.AddEntriesFrom(input, _map_$name$_codec);\n");
+  }
 }
 
 void MapFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
@@ -83,17 +102,45 @@ void MapFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
 }
 
 void MapFieldGenerator::GenerateSerializationCode(io::Printer* printer, bool use_write_context) {
-  printer->Print(
-    variables_,
-    use_write_context
-    ? "$name$_.WriteTo(ref output, _map_$name$_codec);\n"
-    : "$name$_.WriteTo(output, _map_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_field_check$) {\n"
+    );
+    printer->Print(
+      variables_,
+      use_write_context
+      ? "  $name$_.WriteTo(ref output, _map_$name$_codec());\n"
+      : "  $name$_.WriteTo(output, _map_$name$_codec());\n");
+    printer->Print(
+      "}\n"
+    );
+  } else {
+    printer->Print(
+      variables_,
+      use_write_context
+      ? "$name$_.WriteTo(ref output, _map_$name$_codec);\n"
+      : "$name$_.WriteTo(output, _map_$name$_codec);\n");
+  }
 }
 
 void MapFieldGenerator::GenerateSerializedSizeCode(io::Printer* printer) {
-  printer->Print(
-    variables_,
-    "size += $name$_.CalculateSize(_map_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_field_check$) {\n"
+    );
+    printer->Print(
+      variables_,
+      "  size += $name$_.CalculateSize(_map_$name$_codec());\n");
+    printer->Print(
+      "}\n"
+    );
+  } else {
+    printer->Print(
+      variables_,
+      "size += $name$_.CalculateSize(_map_$name$_codec);\n");
+  }
 }
 
 void MapFieldGenerator::WriteHash(io::Printer* printer) {

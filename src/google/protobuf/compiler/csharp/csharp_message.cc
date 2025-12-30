@@ -195,12 +195,26 @@ void MessageGenerator::Generate(io::Printer* printer) {
     const FieldDescriptor* fieldDescriptor = descriptor_->field(i);
 
     // Rats: we lose the debug comment here :(
-    printer->Print(
+    if (options()->dynamic_runtime) {
+       printer->Print(
+        "/// <summary>Field number for the \"$field_name$\" field.</summary>\n"
+        "public static int $field_constant_name$ {\n"
+        "  get { return dyn::DynamicFieldRegistry.GetFieldNumber(\"$full_message_name$\", \"$field_name$\"); }\n"
+        "}\n",
+        "field_name", fieldDescriptor->name(), 
+        "field_constant_name", GetFieldConstantName(fieldDescriptor),
+        "full_message_name", descriptor_->full_name()
+      );
+    } else {
+      printer->Print(
         "/// <summary>Field number for the \"$field_name$\" field.</summary>\n"
         "public const int $field_constant_name$ = $index$;\n",
-        "field_name", fieldDescriptor->name(), "field_constant_name",
-        GetFieldConstantName(fieldDescriptor), "index",
-        absl::StrCat(fieldDescriptor->number()));
+        "field_name", fieldDescriptor->name(), 
+        "field_constant_name", GetFieldConstantName(fieldDescriptor),
+        "index", absl::StrCat(fieldDescriptor->number())
+      );
+    }
+
     std::unique_ptr<FieldGeneratorBase> generator(
         CreateFieldGeneratorInternal(fieldDescriptor));
     generator->GenerateMembers(printer);
@@ -710,13 +724,29 @@ void MessageGenerator::GenerateMainParseLoop(io::Printer* printer,
     // is_repeated && wt in { VARINT, FIXED32, FIXED64 }.
     // It looks like it is...
     if (field->is_packable()) {
-      printer->Print("case $packed_tag$:\n", "packed_tag",
+      if (options()->dynamic_runtime) {
+        printer->Print(
+          "case var _ when tag == dyn::DynamicFieldRegistry.GetTag(\"$full_message_name$\", \"$descriptor_name$\", true):\n", 
+          "full_message_name", descriptor_->full_name(),
+          "descriptor_name", field->name()
+        );
+      } else {
+        printer->Print("case $packed_tag$:\n", "packed_tag",
                      absl::StrCat(internal::WireFormatLite::MakeTag(
                          field->number(),
                          internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED)));
+      }
     }
 
-    printer->Print("case $tag$: {\n", "tag", absl::StrCat(tag));
+    if (options()->dynamic_runtime) {
+      printer->Print(
+        "case var _ when tag == dyn::DynamicFieldRegistry.GetTag(\"$full_message_name$\", \"$descriptor_name$\"): {\n", 
+        "full_message_name", descriptor_->full_name(),
+        "descriptor_name", field->name()
+      );
+    } else {
+      printer->Print("case $tag$: {\n", "tag", absl::StrCat(tag));
+    }
     printer->Indent();
     std::unique_ptr<FieldGeneratorBase> generator(
         CreateFieldGeneratorInternal(field));

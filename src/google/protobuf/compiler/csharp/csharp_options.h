@@ -23,6 +23,8 @@ struct Options {
         base_namespace_specified(false),
         internal_access(false),
         serializable(false),
+        dynamic_runtime(false),
+        emit_xor_const(false),
         strip_nonfunctional_codegen(false) {}
   // Extension of the generated file. Defaults to ".cs"
   std::string file_extension;
@@ -50,6 +52,10 @@ struct Options {
   bool serializable;
   // If true, strip out nonfunctional codegen.
   bool strip_nonfunctional_codegen;
+  // If true, will generate code with dynamic runtime
+  bool dynamic_runtime;
+  // If true, will handle xor constant from field extension
+  bool emit_xor_const;
 };
 
 }  // namespace csharp

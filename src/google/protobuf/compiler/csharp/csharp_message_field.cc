@@ -96,12 +96,24 @@ void MessageFieldGenerator::GenerateParsingCode(io::Printer* printer) {
 
 void MessageFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
   if (descriptor_->type() == FieldDescriptor::Type::TYPE_MESSAGE) {
-    printer->Print(
-      variables_,
-      "if ($has_property_check$) {\n"
-      "  output.WriteRawTag($tag_bytes$);\n"
-      "  output.WriteMessage($property_name$);\n"
-      "}\n");
+    if (options()->dynamic_runtime) {
+      printer->Print(
+        variables_,
+        "if ($has_property_check$) {\n"
+        "  var tag = dyn::DynamicFieldRegistry.GetTag(\"$full_message_name$\", \"$descriptor_name$\");\n"
+        "  if (tag != 0) {\n"
+        "    output.WriteTag(tag);\n"
+        "    output.WriteMessage($property_name$);\n"
+        "  }\n"
+        "}\n");
+    } else {
+      printer->Print(
+        variables_,
+        "if ($has_property_check$) {\n"
+        "  output.WriteRawTag($tag_bytes$);\n"
+        "  output.WriteMessage($property_name$);\n"
+        "}\n");
+    }
   } else {
     printer->Print(
       variables_,
@@ -115,11 +127,21 @@ void MessageFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
 
 void MessageFieldGenerator::GenerateSerializedSizeCode(io::Printer* printer) {
   if (descriptor_->type() == FieldDescriptor::Type::TYPE_MESSAGE) {
-    printer->Print(
-      variables_,
-      "if ($has_property_check$) {\n"
-      "  size += $tag_size$ + pb::CodedOutputStream.ComputeMessageSize($property_name$);\n"
-      "}\n");
+    if (options()->dynamic_runtime) {
+      printer->Print(
+        variables_,
+        "if ($has_property_check$) {\n"
+        "  if ($has_field_check$) {\n"
+        "    size += $tag_size$ + pb::CodedOutputStream.ComputeMessageSize($property_name$);\n"
+        "  }\n"
+        "}\n");
+    } else {
+      printer->Print(
+        variables_,
+        "if ($has_property_check$) {\n"
+        "  size += $tag_size$ + pb::CodedOutputStream.ComputeMessageSize($property_name$);\n"
+        "}\n");
+    }
   } else {
     printer->Print(
       variables_,
@@ -165,9 +187,16 @@ void MessageFieldGenerator::GenerateFreezingCode(io::Printer* printer) {
 
 void MessageFieldGenerator::GenerateCodecCode(io::Printer* printer) {
   if (descriptor_->type() == FieldDescriptor::Type::TYPE_MESSAGE) {
-    printer->Print(
-      variables_,
-      "pb::FieldCodec.ForMessage($tag$, $type_name$.Parser)");
+    if (options()->dynamic_runtime && !IsMapEntryMessage(descriptor_->containing_type())) {
+      printer->Print(
+        variables_,
+        "dyn::DynamicCodec.ForMessage(\"$full_message_name$\", \"$descriptor_name$\", $type_name$.Parser)"
+      );
+    } else {
+      printer->Print(
+        variables_,
+        "pb::FieldCodec.ForMessage($tag$, $type_name$.Parser)");
+    }
   } else {
     printer->Print(
       variables_,

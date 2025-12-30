@@ -37,6 +37,9 @@
 #include "google/protobuf/compiler/retention.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/descriptor.pb.h"
+#include "google/protobuf/wire_format.h"
+#include "google/protobuf/wire_format_lite.h"
+
 
 // Must be last.
 #include "google/protobuf/port_def.inc"
@@ -434,6 +437,45 @@ bool IsNullable(const FieldDescriptor* descriptor) {
       ABSL_LOG(FATAL) << "Unknown field type.";
       return true;
   }
+}
+
+uint64_t GetUnknownVarint(
+  const google::protobuf::UnknownFieldSet& ufs,
+  int field_number)
+{
+  for (int i = 0; i < ufs.field_count(); ++i)
+  {
+    const auto& f = ufs.field(i);
+    if (f.number() == field_number &&
+        f.type() == google::protobuf::UnknownField::TYPE_VARINT)
+    {
+      return f.varint();
+    }
+  }
+  return 0;
+}
+
+std::string GetPropertyAccessor(
+  bool dynamic_runtime,
+  bool emit_xor_const,
+  absl::flat_hash_map<absl::string_view, std::string> variables,
+  const FieldDescriptor* descriptor,
+  std::string type_name) {
+  std::string prop_getter = variables["property_name"];
+
+  if (emit_xor_const && internal::WireFormat::WireTypeForField(descriptor) == internal::WireFormatLite::WireType::WIRETYPE_VARINT) {
+    auto xor_const = GetUnknownVarint(descriptor->options().unknown_fields(), 50001);
+    if (xor_const != 0) {
+      prop_getter += " ^ ";
+      if (dynamic_runtime) {
+        prop_getter += "(" + type_name + ")" + "dyn::DynamicFieldRegistry.GetXorConst(\"" + variables["full_message_name"] + "\", \"" + variables["descriptor_name"] + "\")";
+      } else {
+        prop_getter += absl::StrCat(xor_const);
+      }
+    }
+  }
+
+  return prop_getter;
 }
 
 }  // namespace csharp

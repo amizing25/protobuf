@@ -133,6 +133,17 @@ inline bool RequiresPresenceBit(const FieldDescriptor* descriptor) {
     !descriptor->real_containing_oneof();
 }
 
+uint64_t GetUnknownVarint(
+  const google::protobuf::UnknownFieldSet& ufs,
+  int field_number);
+
+std::string GetPropertyAccessor(
+  bool dynamic_runtime,
+  bool emit_xor_const,
+  absl::flat_hash_map<absl::string_view, std::string> variables,
+  const FieldDescriptor* descriptor,
+  std::string type_name);
+
 }  // namespace csharp
 }  // namespace compiler
 }  // namespace protobuf

@@ -19,6 +19,8 @@
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/descriptor.pb.h"
 #include "google/protobuf/io/printer.h"
+#include "google/protobuf/wire_format.h"
+#include "google/protobuf/wire_format_lite.h"
 
 namespace google {
 namespace protobuf {
@@ -170,34 +172,106 @@ void PrimitiveFieldGenerator::GenerateParsingCode(io::Printer* printer) {
   // so that we can normalize "null to empty" for strings and bytes.
   printer->Print(
     variables_,
-    "$property_name$ = input.Read$capitalized_type_name$();\n");
+    "$property_name$ = input.Read$capitalized_type_name$()");
+
+  // Emit xor const on varint types if specified
+  auto xor_const = GetUnknownVarint(descriptor_->options().unknown_fields(), 50001);
+  if (options()->emit_xor_const && xor_const != 0) {
+    if (options()->dynamic_runtime) {
+      printer->Print(
+        " ^ ($type_name$)dyn::DynamicFieldRegistry.GetXorConst(\"$full_message_name$\", \"$descriptor_name$\")", 
+        "full_message_name", variables_["full_message_name"],
+        "descriptor_name", variables_["descriptor_name"],
+        "type_name", type_name(descriptor_)
+      );
+    } else {
+      printer->Print(" ^ $xor_const$", "xor_const", absl::StrCat(xor_const));
+    }
+  }
+
+  printer->Print(";\n");
 }
 
 void PrimitiveFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
-  printer->Print(
-    variables_,
-    "if ($has_property_check$) {\n"
-    "  output.WriteRawTag($tag_bytes$);\n"
-    "  output.Write$capitalized_type_name$($property_name$);\n"
-    "}\n");
+  auto prop_getter = GetPropertyAccessor(
+    options()->dynamic_runtime, 
+    options()->emit_xor_const, 
+    variables_, descriptor_, 
+    type_name(descriptor_));
+
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_property_check$) {\n"
+      "  var tag = dyn::DynamicFieldRegistry.GetTag(\"$full_message_name$\", \"$descriptor_name$\");\n"
+      "  if (tag != 0) {\n"
+      "    output.WriteTag(tag);\n");
+
+    printer->Print(
+      "    output.Write$capitalized_type_name$($prop_getter$);\n"
+      "  }\n"
+      "}\n",
+      "capitalized_type_name", variables_["capitalized_type_name"],
+      "prop_getter", prop_getter
+    );
+  } else {
+    printer->Print(
+      variables_,
+      "if ($has_property_check$) {\n"
+      "  output.WriteRawTag($tag_bytes$);\n"
+    );
+    printer->Print(
+      "  output.Write$capitalized_type_name$($prop_getter$);\n"
+      "}\n",
+      "capitalized_type_name", variables_["capitalized_type_name"],
+      "prop_getter", prop_getter
+    );
+  }
 }
 
 void PrimitiveFieldGenerator::GenerateSerializedSizeCode(io::Printer* printer) {
+  auto prop_getter = GetPropertyAccessor(
+    options()->dynamic_runtime, 
+    options()->emit_xor_const, 
+    variables_, descriptor_, 
+    type_name(descriptor_));
+
   printer->Print(
     variables_,
     "if ($has_property_check$) {\n");
   printer->Indent();
   int fixedSize = GetFixedSize(descriptor_->type());
+
+  bool dynamic_runtime = options()->dynamic_runtime;
+
+  if (dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_field_check$) {\n"
+    );
+  }
+
   if (fixedSize == -1) {
     printer->Print(
       variables_,
-      "size += $tag_size$ + pb::CodedOutputStream.Compute$capitalized_type_name$Size($property_name$);\n");
+      "size += $tag_size$ + pb::CodedOutputStream.Compute$capitalized_type_name$Size(");
+    printer->Print(
+      "$prop_getter$);\n",
+      "prop_getter", prop_getter
+    );
   } else {
     printer->Print(
       "size += $tag_size$ + $fixed_size$;\n",
       "fixed_size", absl::StrCat(fixedSize),
       "tag_size", variables_["tag_size"]);
   }
+
+  if (dynamic_runtime) {
+    printer->Print(
+      "}\n"
+    );
+  }
+
   printer->Outdent();
   printer->Print("}\n");
 }
@@ -232,9 +306,15 @@ void PrimitiveFieldGenerator::GenerateCloningCode(io::Printer* printer) {
 }
 
 void PrimitiveFieldGenerator::GenerateCodecCode(io::Printer* printer) {
-  printer->Print(
-    variables_,
-    "pb::FieldCodec.For$capitalized_type_name$($tag$, $default_value$)");
+  if (options()->dynamic_runtime && !IsMapEntryMessage(descriptor_->containing_type())) {
+    printer->Print(
+      variables_,
+      "dyn::DynamicCodec.For$capitalized_type_name$(\"$full_message_name$\", \"name\", $default_value$)");
+  } else {
+    printer->Print(
+      variables_,
+      "pb::FieldCodec.For$capitalized_type_name$($tag$, $default_value$)");
+  }
 }
 
 void PrimitiveFieldGenerator::GenerateExtensionCode(io::Printer* printer) {

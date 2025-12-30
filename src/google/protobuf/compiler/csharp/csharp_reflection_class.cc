@@ -114,6 +114,9 @@ void ReflectionClassGenerator::WriteIntroduction(io::Printer* printer) {
     "using scg = global::System.Collections.Generic;\n",
     "file_name", file_->name());
 
+  if (options()->dynamic_runtime) {
+    printer->Print("using dyn = global::DynamicProtobuf.Runtime;\n");
+  }
   if (!namespace_.empty()) {
     printer->Print("namespace $namespace$ {\n", "namespace", namespace_);
     printer->Indent();

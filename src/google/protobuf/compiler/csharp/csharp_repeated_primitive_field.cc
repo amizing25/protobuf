@@ -31,10 +31,17 @@ RepeatedPrimitiveFieldGenerator::RepeatedPrimitiveFieldGenerator(
 RepeatedPrimitiveFieldGenerator::~RepeatedPrimitiveFieldGenerator() = default;
 
 void RepeatedPrimitiveFieldGenerator::GenerateMembers(io::Printer* printer) {
-  printer->Print(
-    variables_,
-    "private static readonly pb::FieldCodec<$type_name$> _repeated_$name$_codec\n"
-    "    = pb::FieldCodec.For$capitalized_type_name$($tag$);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "private static pb::FieldCodec<$type_name$> _repeated_$name$_codec()\n"
+      "    => dyn::DynamicCodec.For$capitalized_type_name$(\"$full_message_name$\", \"$descriptor_name$\");\n");
+  } else {
+    printer->Print(
+      variables_,
+      "private static readonly pb::FieldCodec<$type_name$> _repeated_$name$_codec\n"
+      "    = pb::FieldCodec.For$capitalized_type_name$($tag$);\n");
+  }
   printer->Print(variables_,
     "private readonly pbc::RepeatedField<$type_name$> $name$_ = new pbc::RepeatedField<$type_name$>();\n");
   WritePropertyDocComment(printer, options(), descriptor_);
@@ -57,11 +64,19 @@ void RepeatedPrimitiveFieldGenerator::GenerateParsingCode(io::Printer* printer) 
 }
 
 void RepeatedPrimitiveFieldGenerator::GenerateParsingCode(io::Printer* printer, bool use_parse_context) {
-  printer->Print(
-    variables_,
-    use_parse_context
-    ? "$name$_.AddEntriesFrom(ref input, _repeated_$name$_codec);\n"
-    : "$name$_.AddEntriesFrom(input, _repeated_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      use_parse_context
+      ? "$name$_.AddEntriesFrom(ref input, _repeated_$name$_codec());\n"
+      : "$name$_.AddEntriesFrom(input, _repeated_$name$_codec());\n");
+  } else {
+    printer->Print(
+      variables_,
+      use_parse_context
+      ? "$name$_.AddEntriesFrom(ref input, _repeated_$name$_codec);\n"
+      : "$name$_.AddEntriesFrom(input, _repeated_$name$_codec);\n");
+  }
 }
 
 void RepeatedPrimitiveFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
@@ -69,17 +84,45 @@ void RepeatedPrimitiveFieldGenerator::GenerateSerializationCode(io::Printer* pri
 }
 
 void RepeatedPrimitiveFieldGenerator::GenerateSerializationCode(io::Printer* printer, bool use_write_context) {
-  printer->Print(
-    variables_,
-    use_write_context
-    ? "$name$_.WriteTo(ref output, _repeated_$name$_codec);\n"
-    : "$name$_.WriteTo(output, _repeated_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_field_check$) {\n"
+    );
+    printer->Print(
+      variables_,
+      use_write_context
+      ? "  $name$_.WriteTo(ref output, _repeated_$name$_codec());\n"
+      : "  $name$_.WriteTo(output, _repeated_$name$_codec());\n");
+    printer->Print(
+      "}\n"
+    );
+  } else {
+    printer->Print(
+      variables_,
+      use_write_context
+      ? "$name$_.WriteTo(ref output, _repeated_$name$_codec);\n"
+      : "$name$_.WriteTo(output, _repeated_$name$_codec);\n");
+  }
 }
 
 void RepeatedPrimitiveFieldGenerator::GenerateSerializedSizeCode(io::Printer* printer) {
-  printer->Print(
-    variables_,
-    "size += $name$_.CalculateSize(_repeated_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_field_check$) {\n"
+    );
+    printer->Print(
+      variables_,
+      "  size += $name$_.CalculateSize(_repeated_$name$_codec());\n");
+    printer->Print(
+      "}\n"
+    );
+  } else {
+    printer->Print(
+      variables_,
+      "size += $name$_.CalculateSize(_repeated_$name$_codec);\n");
+  }
 }
 
 void RepeatedPrimitiveFieldGenerator::WriteHash(io::Printer* printer) {

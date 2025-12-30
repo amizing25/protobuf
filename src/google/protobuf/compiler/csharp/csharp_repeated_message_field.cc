@@ -32,10 +32,18 @@ RepeatedMessageFieldGenerator::RepeatedMessageFieldGenerator(
 RepeatedMessageFieldGenerator::~RepeatedMessageFieldGenerator() = default;
 
 void RepeatedMessageFieldGenerator::GenerateMembers(io::Printer* printer) {
-  printer->Print(
-    variables_,
-    "private static readonly pb::FieldCodec<$type_name$> _repeated_$name$_codec\n"
-    "    = ");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "private static pb::FieldCodec<$type_name$> _repeated_$name$_codec()\n"
+      "    => "
+    );
+  } else {
+    printer->Print(
+      variables_,
+      "private static readonly pb::FieldCodec<$type_name$> _repeated_$name$_codec\n"
+      "    = ");
+  }
   // Don't want to duplicate the codec code here... maybe we should have a
   // "create single field generator for this repeated field"
   // function, but it doesn't seem worth it for just this.
@@ -72,11 +80,19 @@ void RepeatedMessageFieldGenerator::GenerateParsingCode(io::Printer* printer) {
 }
 
 void RepeatedMessageFieldGenerator::GenerateParsingCode(io::Printer* printer, bool use_parse_context) {
-  printer->Print(
-    variables_,
-    use_parse_context
-    ? "$name$_.AddEntriesFrom(ref input, _repeated_$name$_codec);\n"
-    : "$name$_.AddEntriesFrom(input, _repeated_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      use_parse_context
+      ? "$name$_.AddEntriesFrom(ref input, _repeated_$name$_codec());\n"
+      : "$name$_.AddEntriesFrom(input, _repeated_$name$_codec());\n");
+  } else {
+    printer->Print(
+      variables_,
+      use_parse_context
+      ? "$name$_.AddEntriesFrom(ref input, _repeated_$name$_codec);\n"
+      : "$name$_.AddEntriesFrom(input, _repeated_$name$_codec);\n");
+  }
 }
 
 void RepeatedMessageFieldGenerator::GenerateSerializationCode(io::Printer* printer) {
@@ -84,17 +100,45 @@ void RepeatedMessageFieldGenerator::GenerateSerializationCode(io::Printer* print
 }
 
 void RepeatedMessageFieldGenerator::GenerateSerializationCode(io::Printer* printer, bool use_write_context) {
-  printer->Print(
-    variables_,
-    use_write_context
-    ? "$name$_.WriteTo(ref output, _repeated_$name$_codec);\n"
-    : "$name$_.WriteTo(output, _repeated_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_field_check$) {\n"
+    );
+    printer->Print(
+      variables_,
+      use_write_context
+      ? "  $name$_.WriteTo(ref output, _repeated_$name$_codec());\n"
+      : "  $name$_.WriteTo(output, _repeated_$name$_codec());\n");
+    printer->Print(
+      "}\n"
+    );
+  } else {
+    printer->Print(
+      variables_,
+      use_write_context
+      ? "$name$_.WriteTo(ref output, _repeated_$name$_codec);\n"
+      : "$name$_.WriteTo(output, _repeated_$name$_codec);\n");
+  }
 }
 
 void RepeatedMessageFieldGenerator::GenerateSerializedSizeCode(io::Printer* printer) {
-  printer->Print(
-    variables_,
-    "size += $name$_.CalculateSize(_repeated_$name$_codec);\n");
+  if (options()->dynamic_runtime) {
+    printer->Print(
+      variables_,
+      "if ($has_field_check$) {\n"
+    );
+    printer->Print(
+      variables_,
+      "  size += $name$_.CalculateSize(_repeated_$name$_codec());\n");
+    printer->Print(
+      "}\n"
+    );
+  } else {
+    printer->Print(
+      variables_,
+      "size += $name$_.CalculateSize(_repeated_$name$_codec);\n");
+  }
 }
 
 void RepeatedMessageFieldGenerator::WriteHash(io::Printer* printer) {
