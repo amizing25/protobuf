@@ -439,7 +439,7 @@ bool IsNullable(const FieldDescriptor* descriptor) {
   }
 }
 
-uint64_t GetUnknownVarint(
+int64_t GetUnknownVarint(
   const google::protobuf::UnknownFieldSet& ufs,
   int field_number)
 {
@@ -449,10 +449,50 @@ uint64_t GetUnknownVarint(
     if (f.number() == field_number &&
         f.type() == google::protobuf::UnknownField::TYPE_VARINT)
     {
-      return f.varint();
+      return static_cast<int64_t>(f.varint());
     }
   }
-  return 0;
+  return -1;
+}
+
+int64_t GetXorConst(const FieldDescriptor* descriptor) {
+  int64_t xor_const = -1;
+
+  // try using field options
+  xor_const = GetUnknownVarint(descriptor->options().unknown_fields(), 50001);
+  if (xor_const > -1) {
+    return xor_const;
+  }
+
+  // parse from comments
+  SourceLocation location;
+  if(!descriptor->GetSourceLocation(&location)) {
+    return xor_const;
+  }
+  
+  std::string comments = location.leading_comments.empty() ? location.trailing_comments : location.leading_comments;
+
+  if (comments.empty()) {
+    return xor_const;
+  }
+
+  std::vector<absl::string_view> lines = absl::StrSplit(comments, '\n', absl::SkipEmpty());
+
+  for (std::vector<absl::string_view>::iterator it = lines.begin(); it != lines.end(); ++it) {
+    absl::string_view line = *it;
+
+    for (absl::string_view to_find : {"XOR:", "xor const:"}) {
+      size_t pos = line.find(to_find);
+      if (pos != absl::string_view::npos) {
+        absl::string_view value_str = line.substr(pos + to_find.size());
+        if (absl::SimpleAtoi(value_str, &xor_const)) {
+          break;
+        }
+      }
+    }
+  }
+
+  return xor_const;
 }
 
 std::string GetPropertyAccessor(
@@ -464,8 +504,8 @@ std::string GetPropertyAccessor(
   std::string prop_getter = variables["property_name"];
 
   if (emit_xor_const && internal::WireFormat::WireTypeForField(descriptor) == internal::WireFormatLite::WireType::WIRETYPE_VARINT) {
-    auto xor_const = GetUnknownVarint(descriptor->options().unknown_fields(), 50001);
-    if (xor_const != 0) {
+    int64_t xor_const = GetXorConst(descriptor);
+    if (xor_const > 0) {
       prop_getter += " ^ ";
       if (dynamic_runtime) {
         prop_getter += "(" + type_name + ")" + "dyn::DynamicFieldRegistry.GetXorConst(\"" + variables["full_message_name"] + "\", \"" + variables["descriptor_name"] + "\")";

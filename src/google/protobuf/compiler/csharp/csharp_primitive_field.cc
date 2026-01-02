@@ -175,8 +175,8 @@ void PrimitiveFieldGenerator::GenerateParsingCode(io::Printer* printer) {
     "$property_name$ = input.Read$capitalized_type_name$()");
 
   // Emit xor const on varint types if specified
-  auto xor_const = GetUnknownVarint(descriptor_->options().unknown_fields(), 50001);
-  if (options()->emit_xor_const && xor_const != 0) {
+  auto xor_const = GetXorConst(descriptor_);
+  if (options()->emit_xor_const && xor_const > 0) {
     if (options()->dynamic_runtime) {
       printer->Print(
         " ^ ($type_name$)dyn::DynamicFieldRegistry.GetXorConst(\"$full_message_name$\", \"$descriptor_name$\")", 

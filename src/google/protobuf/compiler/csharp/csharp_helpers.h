@@ -133,9 +133,7 @@ inline bool RequiresPresenceBit(const FieldDescriptor* descriptor) {
     !descriptor->real_containing_oneof();
 }
 
-uint64_t GetUnknownVarint(
-  const google::protobuf::UnknownFieldSet& ufs,
-  int field_number);
+int64_t GetXorConst(const FieldDescriptor* descriptor);
 
 std::string GetPropertyAccessor(
   bool dynamic_runtime,
